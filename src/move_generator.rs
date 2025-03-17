@@ -1,5 +1,5 @@
 
-use std::vec;
+use std::{usize, vec};
 
 use crate::{attack_maps::{DIAGONAL_RAYS, KING_ATTACKS, KNIGHT_JUMPS, PAWN_CAPTURES, PAWN_PUSH, STRAIGHT_RAYS}, piece_set::PieceSet, utils::{flip_bit, get_lsb, test_bit}};
 
@@ -15,12 +15,20 @@ const EN_PESSANT : u16 = 5;
 const CASTLE_KING : u16 = 6;
 const CASTLE_QUEEN : u16 = 7;
 
+const DOUBLE_PAWN_PUSH : u16= 8;
+
 const WHITE_KING_START: usize = 4;
 const BLACK_KING_START: usize = 60;
+
 const WHITE_KINGSIDE_MASK: u64 = 0x60; 
 const WHITE_QUEENSIDE_MASK: u64 = 0x0E;
+const WHITE_KINGSIDE_MASK_WITH_KING : u64 = WHITE_KINGSIDE_MASK | 1 << 4;
+const WHITE_QUEENSIDE_MASK_WITH_KING : u64 = WHITE_QUEENSIDE_MASK | 1 << 4;
+
 const BLACK_KINGSIDE_MASK: u64 = 1u64 << 61 | 1u64 << 62;
 const BLACK_QUEENSIDE_MASK: u64 = 1u64 << 59 | 1u64 << 58 | 1u64 << 57;
+const BLACK_KINGSIDE_MASK_WITH_KING : u64 = BLACK_KINGSIDE_MASK | 1u64 << 60;
+const BLACK_QUEENSIDE_MASK_WITH_KING : u64= BLACK_QUEENSIDE_MASK | 1u64 << 60;
 
 pub fn generate_diagonal_moves(index : usize , occupied : u64) -> u64{
     
@@ -93,27 +101,24 @@ pub fn generate_pawn_moves(index : usize , occupied : u64 , turn : usize , enemy
 }
 
 
-pub fn generate_king_moves(index : usize , occupied : u64 , castle_rooks : u64 , turn :bool , in_check : bool) -> u64{
+pub fn generate_king_moves(index : usize , occupied : u64 , castle_rooks : u64 , turn : bool , enemey_attack_map : u64) -> u64{
     let mut moves = KING_ATTACKS[index];
-    if in_check == true || castle_rooks == 0 {
-        return moves;
-    }
 
     if turn == false && index == WHITE_KING_START {
-        if test_bit(castle_rooks, 7) && (occupied & WHITE_KINGSIDE_MASK == 0) {
+        if test_bit(castle_rooks, 7) && (occupied & WHITE_KINGSIDE_MASK == 0) && (enemey_attack_map & WHITE_KINGSIDE_MASK_WITH_KING) == 0 {
             moves |= 1 << 6;
         }
-        if test_bit(castle_rooks, 0) && (occupied & WHITE_QUEENSIDE_MASK == 0) {
+        if test_bit(castle_rooks, 0) && (occupied & WHITE_QUEENSIDE_MASK == 0) && (enemey_attack_map & WHITE_QUEENSIDE_MASK_WITH_KING) == 0 {
             moves |= 1 << 2;
         }
     } 
 
     if turn == true && index == BLACK_KING_START {
-        if test_bit(castle_rooks, 63) && (occupied & BLACK_KINGSIDE_MASK == 0) {
+        if test_bit(castle_rooks, 63) && (occupied & BLACK_KINGSIDE_MASK == 0) && (enemey_attack_map & BLACK_KINGSIDE_MASK_WITH_KING) == 0 {
             moves |= 1u64 << 62;
         }
         
-        if test_bit(castle_rooks, 56) && (occupied & BLACK_QUEENSIDE_MASK == 0) {
+        if test_bit(castle_rooks, 56) && (occupied & BLACK_QUEENSIDE_MASK == 0) && (enemey_attack_map & BLACK_QUEENSIDE_MASK_WITH_KING) == 0 {
             moves |= 1u64 << 58;
         }
         
@@ -147,13 +152,16 @@ pub fn iterate_move_map( piece_set : &PieceSet , src_index : usize,
             else if (distance == 7 || distance == 9) && !test_bit(piece_set.occupied, dis_index as usize) {
                 moves.push(mov | (EN_PESSANT << 12));
             }
+            else if distance == 16{
+                moves.push(mov | (DOUBLE_PAWN_PUSH << 12));
+            }
             else 
             {
                 moves.push(mov);
             }
         } 
         else if mode == 2 && distance >= 2 && dis_index >> 3 == src_index >> 3 {
-            if distance == 2 {
+            if dis_index == 6 || dis_index == 62 {
                 moves.push(mov | (CASTLE_KING << 12));
             }
             else 
@@ -201,4 +209,34 @@ where
     }
 
     moves
+}
+
+
+pub fn iterate_attack_moves< F , T>(
+    mut piece_positions : u64,
+    generation_function : F,
+    args : T
+) -> u64
+where 
+    F : Fn (usize , &T) -> u64
+{
+    let mut attacks = 0;
+    loop {
+        let index = get_lsb(piece_positions);
+        if index == 64{
+            break;
+        }
+        attacks |= generation_function(index , &args);
+        flip_bit(&mut piece_positions, index);
+    }
+    attacks
+}
+
+
+pub fn generate_king_attacks(index : usize) -> u64 {
+    KING_ATTACKS[index]
+}
+
+pub fn generate_pawn_attacks(index : usize , turn : bool) -> u64 {
+    PAWN_CAPTURES[turn as usize][index]
 }

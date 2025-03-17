@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Frontend with WebSockets</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .chessboard {
+            width: 400px;
+            height: 400px;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            border: 2px solid #333;
+        }
+
+        .square {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .white {
+            background-color: #f0d9b5;
+        }
+
+        .black {
+            background-color: #b58863;
+        }
+
+        .piece {
+            width: 40px;
+            height: 40px;
+            cursor: grab;
+            font-size: 36px;
+            user-select: none;
+        }
+
+        .highlighted {
+            background-color: rgba(173, 216, 230, 0.8);
+        }
+
+        #move-info {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            width: 400px;
+            background-color: white;
+        }
+
+        #connection-status {
+            margin-top: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        .connected {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .disconnected {
+            background-color: #f44336;
+            color: white;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chess Frontend with WebSockets</h1>
+    <div id="connection-status" class="disconnected">Disconnected</div>
+    <div class="chessboard" id="chessboard"></div>
+    <div id="move-info">Last move: None</div>
+    <button id="send-move">Send Move to Engine</button>
+    <button id="reset-board">Reset Board</button>
+
+    <script>
+        // Chess state
+        const PIECES = {
+            'wp': '♙', 'wr': '♖', 'wn': '♘', 'wb': '♗', 'wq': '♕', 'wk': '♔',
+            'bp': '♟', 'br': '♜', 'bn': '♞', 'bb': '♝', 'bq': '♛', 'bk': '♚'
+        };
+
+        const INITIAL_POSITION = [
+            ['br', 'bn', 'bb', 'bq', 'bk', 'bb', 'bn', 'br'],
+            ['bp', 'bp', 'bp', 'bp', 'bp', 'bp', 'bp', 'bp'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['wp', 'wp', 'wp', 'wp', 'wp', 'wp', 'wp', 'wp'],
+            ['wr', 'wn', 'wb', 'wq', 'wk', 'wb', 'wn', 'wr']
+        ];
+
+        let board = JSON.parse(JSON.stringify(INITIAL_POSITION));
+        let lastMove = null;
+        let draggedPiece = null;
+        let draggedPiecePosition = null;
+        let websocket = null;
+
+        // DOM elements
+        const chessboardElement = document.getElementById('chessboard');
+        const moveInfoElement = document.getElementById('move-info');
+        const sendMoveButton = document.getElementById('send-move');
+        const resetBoardButton = document.getElementById('reset-board');
+        const connectionStatusElement = document.getElementById('connection-status');
+
+        // Initialize the board
+        function initializeBoard() {
+            chessboardElement.innerHTML = '';
+            
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.classList.add('square');
+                    square.classList.add((row + col) % 2 === 0 ? 'white' : 'black');
+                    square.dataset.row = row;
+                    square.dataset.col = col;
+                    
+                    // Add piece if there is one
+                    const piece = board[row][col];
+                    if (piece) {
+                        const pieceElement = document.createElement('div');
+                        pieceElement.classList.add('piece');
+                        pieceElement.dataset.piece = piece;
+                        pieceElement.textContent = PIECES[piece];
+                        pieceElement.draggable = true;
+                        
+                        // Add drag event listeners
+                        pieceElement.addEventListener('dragstart', handleDragStart);
+                        
+                        square.appendChild(pieceElement);
+                    }
+                    
+                    // Add drop event listeners
+                    square.addEventListener('dragover', handleDragOver);
+                    square.addEventListener('drop', handleDrop);
+                    
+                    chessboardElement.appendChild(square);
+                }
+            }
+        }
+        
+        // Drag and drop functions
+        function handleDragStart(e) {
+            draggedPiece = e.target;
+            
+            // Store original position
+            const square = draggedPiece.parentElement;
+            draggedPiecePosition = {
+                row: parseInt(square.dataset.row),
+                col: parseInt(square.dataset.col)
+            };
+            
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', e.target.dataset.piece);
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            return false;
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            
+            if (!draggedPiece) return;
+            
+            const targetSquare = e.target.closest('.square');
+            if (!targetSquare) return;
+            
+            const toRow = parseInt(targetSquare.dataset.row);
+            const toCol = parseInt(targetSquare.dataset.col);
+            
+            // Make the move
+            makeMove(draggedPiecePosition.row, draggedPiecePosition.col, toRow, toCol);
+        }
+        
+        // Game logic
+        function makeMove(fromRow, fromCol, toRow, toCol) {
+            const piece = board[fromRow][fromCol];
+            
+            // Basic validation - there must be a piece
+            if (!piece) {
+                return false;
+            }
+            
+            // Store the move for sending to the engine
+            lastMove = {
+                from: { row: fromRow, col: fromCol },
+                to: { row: toRow, col: toCol },
+                piece: piece
+            };
+            
+            // Make the move on the board
+            board[toRow][toCol] = piece;
+            board[fromRow][fromCol] = '';
+            
+            // Refresh the board
+            initializeBoard();
+            
+            // Update move info display
+            updateMoveInfo();
+            
+            return true;
+        }
+        
+        function updateMoveInfo() {
+            if (lastMove) {
+                const fromFile = String.fromCharCode(97 + lastMove.from.col);
+                const fromRank = 8 - lastMove.from.row;
+                const toFile = String.fromCharCode(97 + lastMove.to.col);
+                const toRank = 8 - lastMove.to.row;
+                
+                moveInfoElement.textContent = `Last move: ${fromFile}${fromRank} to ${toFile}${toRank} (${lastMove.piece})`;
+            } else {
+                moveInfoElement.textContent = 'Last move: None';
+            }
+        }
+        
+        // WebSocket communication
+        function connectWebSocket() {
+            // Close any existing connection
+            if (websocket) {
+                websocket.close();
+            }
+            
+            // Create new WebSocket connection
+            websocket = new WebSocket('ws://localhost:5501');
+            
+            websocket.onopen = function(event) {
+                console.log('WebSocket connected');
+                connectionStatusElement.textContent = 'Connected';
+                connectionStatusElement.className = 'connected';
+                sendMoveButton.disabled = false;
+            };
+            
+            websocket.onclose = function(event) {
+                console.log('WebSocket disconnected');
+                connectionStatusElement.textContent = 'Disconnected';
+                connectionStatusElement.className = 'disconnected';
+                sendMoveButton.disabled = true;
+                
+                // Try to reconnect after a delay
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            websocket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                connectionStatusElement.textContent = 'Connection Error';
+                connectionStatusElement.className = 'disconnected';
+            };
+            
+            websocket.onmessage = function(event) {
+                console.log('Message from server:', event.data);
+                try {
+                    const response = JSON.parse(event.data);
+                    
+                    if (response.status === 'success') {
+                        // Handle successful response
+                        moveInfoElement.textContent += ' - Sent to engine';
+                    } else {
+                        // Handle error
+                        alert(`Error from engine: ${response.message}`);
+                    }
+                } catch (e) {
+                    console.error('Error parsing server message:', e);
+                }
+            };
+        }
+        
+        function sendMoveToEngine() {
+            if (!lastMove || !websocket || websocket.readyState !== WebSocket.OPEN) {
+                alert('Cannot send move: WebSocket not connected or no move to send');
+                return;
+            }
+            
+            // Convert move to algebraic notation
+            const fromFile = String.fromCharCode(97 + lastMove.from.col);
+            const fromRank = 8 - lastMove.from.row;
+            const toFile = String.fromCharCode(97 + lastMove.to.col);
+            const toRank = 8 - lastMove.to.row;
+            
+            // Create move data object
+            const moveData = {
+                from: `${fromFile}${fromRank}`,
+                to: `${toFile}${toRank}`,
+                piece: lastMove.piece
+            };
+            
+            // Send move to server
+            websocket.send(JSON.stringify(moveData));
+            console.log('Sent move to server:', moveData);
+        }
+        
+        function resetBoard() {
+            board = JSON.parse(JSON.stringify(INITIAL_POSITION));
+            lastMove = null;
+            initializeBoard();
+            updateMoveInfo();
+        }
+        
+        // Event listeners
+        sendMoveButton.addEventListener('click', sendMoveToEngine);
+        resetBoardButton.addEventListener('click', resetBoard);
+        
+        // Initialize on load
+        initializeBoard();
+        connectWebSocket();
+    </script>
+</body>
+</html>

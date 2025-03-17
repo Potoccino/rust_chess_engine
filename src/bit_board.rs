@@ -1,6 +1,6 @@
-use crate::piece_set::PieceSet;
+use crate:: piece_set::PieceSet;
 
-
+#[derive(PartialEq)]
 pub enum PieceType {
     Pawn,
     Knight,
@@ -16,6 +16,7 @@ pub struct BitBoard
 {
     pub black_set : PieceSet,
     pub white_set : PieceSet,  
+
 }
 
 

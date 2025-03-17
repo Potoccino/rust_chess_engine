@@ -1,7 +1,6 @@
 
 
-
-#[cfg(test)]
+#[allow(unused)]#[cfg(test)]
 mod tests {
     use super::*;
 

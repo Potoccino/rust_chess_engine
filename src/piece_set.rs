@@ -12,6 +12,7 @@ pub struct PieceSet
     pub occupied : u64,
     pub double_push_pawns : u64,
     pub castle_rooks : u64,   
+    pub attack_map : u64,
 }
 
 
@@ -29,6 +30,7 @@ impl PieceSet
             occupied : 0,
             double_push_pawns : 0,
             castle_rooks : 0,
+            attack_map : 0,
         };
         return piece_set;
     }
