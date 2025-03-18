@@ -1,5 +1,5 @@
 
-use crate::{attack_maps::{DIAGONAL_RAYS, KNIGHT_JUMPS, STRAIGHT_RAYS}, bit_board::{BitBoard, PieceType}, move_generator::{generate_diagonal_moves, generate_king_attacks, generate_king_moves, generate_knight_moves, generate_pawn_attacks, generate_pawn_moves, generate_straight_moves, iterate_attack_moves, iterate_possible_move}, piece_set::PieceSet, utils::{flip_bit, get_lsb, print_bitset, print_board, read_move_components, reset_bit, set_bit, test_bit}};
+use crate::{attack_maps::{DIAGONAL_RAYS, KNIGHT_JUMPS, STRAIGHT_RAYS}, bit_board::{BitBoard, PieceType}, move_generator::{generate_diagonal_moves, generate_king_attacks, generate_king_moves, generate_knight_moves, generate_pawn_attacks, generate_pawn_moves, generate_straight_moves, iterate_attack_moves, iterate_possible_move}, piece_set::{self, PieceSet}, utils::{flip_bit, get_lsb, print_bitset, print_board, print_move, read_move_components, reset_bit, set_bit, test_bit}};
 
 
 const KNIGHT_PROMOTED : u16 = 1;
@@ -182,7 +182,16 @@ pub fn apply_normal_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16)
     let src = mov as usize & 0x3F;
     let dest = (mov as usize >> 6) & 0x3F;
 
-    let src_piece_type  = get_piece_type(ally_pieces, src).unwrap();
+    // let src_piece_type  = get_piece_type(ally_pieces, src).unwrap();
+
+    let src_piece_type = match get_piece_type(ally_pieces, src) {
+        Some(piece_type) => piece_type,
+        _ => {
+            print_board(board);
+            print_move(&mov);
+            panic!();
+        }
+    };
 
     let rooks = ally_pieces.castle_rooks;
 
@@ -489,7 +498,7 @@ pub fn apply_move<>(board : &  mut BitBoard , turn : bool , mov : u16) -> MoveRe
 }
 
 pub fn unapply_move<'a>(board : & 'a mut BitBoard , turn : bool , mov : u16 , mov_result : MoveResult) {
-    match mov {
+    match mov >> 12 {
         KNIGHT_PROMOTED | BISHOP_PROMOTED | ROOK_PROMOTED | QUEEN_PROMOTED => {
             if let MoveResult::Promotions(promoted_piece_type, dest_piece_type) = mov_result {
                 unapply_promotion(board, turn, mov, promoted_piece_type, dest_piece_type);

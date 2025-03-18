@@ -7,7 +7,7 @@ pub fn print_move(mov : &u16) {
     let dest = (mov >> 6) & 0x3F;  
     let special = (mov >> 12) & 0x7;
 
-    println!("Move from {} to {} with special {}", src, dest, special);
+    println!("Move from {} to {} with special {}\n", src, dest, special);
 
 }
 
@@ -99,6 +99,10 @@ pub fn print_board(board : &BitBoard)
     println!("");
 
 
+}
+
+pub fn get_bit(bitset :  u64 , index : usize) -> bool{
+    (1u64 << index) & bitset != 0
 }
 
 pub fn set_bit( bitset :  &mut u64 , index : usize) {

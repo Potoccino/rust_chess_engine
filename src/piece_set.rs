@@ -1,6 +1,6 @@
 
 
-#[derive(Clone)]
+#[derive(Clone , Eq , PartialEq)]
 pub struct PieceSet
 {
     pub rooks : u64,

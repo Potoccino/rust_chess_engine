@@ -2,6 +2,11 @@
 
 #[allow(unused)]#[cfg(test)]
 mod tests {
+    use std::collections::hash_map;
+    use std::collections::HashMap;
+    use std::hash::DefaultHasher;
+    use std::hash::Hash;
+
     use super::*;
 
     use crate::bit_board::BitBoard;
@@ -245,4 +250,123 @@ mod tests {
         assert_eq!(board.white_set.castle_rooks, 1u64 << 7);
         assert!(compare_boards(&board, &initial_board));
     }
+
+    #[test]
+    fn test_apply_unapply_double_pawn_push() {
+        // Create a test board
+        let mut board = BitBoard::get_empty_board(); // Assuming you have a default constructor
+        
+        // Set up initial board state with a white pawn at e2 (index 12)
+        let src = 12; // e2 square
+        let dest = 28; // e4 square (double push)
+        let mov = (dest as u16) << 6 | (src as u16);
+        
+        // Set initial state
+        set_bit(&mut board.white_set.pawns, src);
+        set_bit(&mut board.white_set.occupied, src);
+        
+        // Save initial state for comparison
+        let initial_white_pawns = board.white_set.pawns;
+        let initial_white_occupied = board.white_set.occupied;
+        let initial_double_push_pawns = board.white_set.double_push_pawns;
+        
+        // Apply move
+        apply_double_pawn_push(&mut board, false, mov);
+        
+        // Check that the double push was applied correctly
+        assert_eq!(get_bit(board.white_set.pawns, src), false, "Pawn should be removed from src");
+        assert_eq!(get_bit(board.white_set.occupied, src), false, "Occupied bit should be removed from src");
+        assert_eq!(get_bit(board.white_set.pawns, dest), true, "Pawn should be added to dest");
+        assert_eq!(get_bit(board.white_set.occupied, dest), true, "Occupied bit should be added to dest");
+        
+        // Check that the double push flag is set correctly
+        // For white, the en passant square would be e3 (index 20)
+        assert_eq!(board.white_set.double_push_pawns, 1u64 << 20, "Double push flag should be set at e3");
+        
+        // Unapply move
+        unapply_doublw_pawn_push(&mut board, false, mov);
+        
+        // Check that the board is restored to its initial state
+        assert_eq!(board.white_set.pawns, initial_white_pawns, "Pawns should be restored to initial state");
+        assert_eq!(board.white_set.occupied, initial_white_occupied, "Occupied bits should be restored");
+        assert_eq!(board.white_set.double_push_pawns, 0, "Double push flag should be reset to 0");
+        
+        // Now test for black pawn (from e7 to e5)
+        let mut board = BitBoard::get_empty_board();
+        
+        // Set up initial board state with a black pawn at e7 (index 52)
+        let src = 52; // e7 square
+        let dest = 36; // e5 square (double push)
+        let mov = (dest as u16) << 6 | (src as u16);
+        
+        // Set initial state
+        set_bit(&mut board.black_set.pawns, src);
+        set_bit(&mut board.black_set.occupied, src);
+        
+        // Save initial state for comparison
+        let initial_black_pawns = board.black_set.pawns;
+        let initial_black_occupied = board.black_set.occupied;
+        let initial_double_push_pawns = board.black_set.double_push_pawns;
+        
+        // Apply move
+        apply_double_pawn_push(&mut board, true, mov);
+        
+        // Check that the double push was applied correctly
+        assert_eq!(get_bit(board.black_set.pawns, src), false, "Black pawn should be removed from src");
+        assert_eq!(get_bit(board.black_set.occupied, src), false, "Black occupied bit should be removed from src");
+        assert_eq!(get_bit(board.black_set.pawns, dest), true, "Black pawn should be added to dest");
+        assert_eq!(get_bit(board.black_set.occupied, dest), true, "Black occupied bit should be added to dest");
+        
+        // Check that the double push flag is set correctly
+        // For black, the en passant square would be e6 (index 44)
+        assert_eq!(board.black_set.double_push_pawns, 1u64 << 44, "Double push flag should be set at e6");
+        
+        // Unapply move
+        unapply_doublw_pawn_push(&mut board, true, mov);
+        
+        // Check that the board is restored to its initial state
+        assert_eq!(board.black_set.pawns, initial_black_pawns, "Black pawns should be restored to initial state");
+        assert_eq!(board.black_set.occupied, initial_black_occupied, "Black occupied bits should be restored");
+        assert_eq!(board.black_set.double_push_pawns, 0, "Double push flag should be reset to 0");
+    }
+
+
+    
+
+    fn preft_helper(mut board :  &mut BitBoard , turn : bool , depth : i32 , hash_map : & mut HashMap<BitBoard , u64>) -> u64{
+        if depth == 0 {
+            return 1;
+        }
+
+        board.white_set.attack_map = generate_attack_maps(&mut board, false);
+        board.black_set.attack_map = generate_attack_maps(&mut board, true);
+        
+        let moves = generate_moves(&mut board, turn);
+        let mut move_count = 0 ;
+
+        for mov in moves {
+            let mov_result = apply_move(&mut board, turn, mov);
+            if king_in_check(&board, turn) {
+                unapply_move(&mut board, turn, mov, mov_result);
+                continue;
+            }
+            move_count += preft_helper(board, !turn, depth - 1 , hash_map);
+            unapply_move(&mut board, turn, mov, mov_result);
+        }
+
+        move_count
+    }
+
+    #[test]
+    fn perft_test(){
+        let mut board = BitBoard::get_starting_board();
+        let mut hash_map : HashMap<BitBoard, u64> = HashMap::new();
+
+
+        let move_count = preft_helper(&mut board, false, 4 , &mut hash_map);
+        println!("{}" , move_count);
+
+    }
+
+
 }
