@@ -1,4 +1,3 @@
-
 use crate::{attack_maps::{DIAGONAL_RAYS, KNIGHT_JUMPS, STRAIGHT_RAYS}, bit_board::{BitBoard, PieceType}, move_generator::{generate_diagonal_moves, generate_king_attacks, generate_king_moves, generate_knight_moves, generate_pawn_attacks, generate_pawn_moves, generate_straight_moves, iterate_attack_moves, iterate_possible_move}, piece_set::{self, PieceSet}, utils::{flip_bit, get_lsb, print_bitset, print_board, print_move, read_move_components, reset_bit, set_bit, test_bit}};
 
 
@@ -92,45 +91,47 @@ pub fn generate_moves(board : &BitBoard , turn : bool) -> Vec<u16> {
 
     let occupied = ally.occupied | enemy.occupied;
 
-    moves.append(
-        &mut iterate_possible_move(ally.bishops, ally, enemy, 0,  |index, occupied| generate_diagonal_moves(index, *occupied),
-        occupied)
+    iterate_possible_move(ally.bishops, ally, enemy, 0, 
+        |index, occupied| generate_diagonal_moves(index, *occupied),
+        occupied, &mut moves
     );   
 
-    moves.append(
-        &mut iterate_possible_move(ally.queens, ally, enemy, 0,  |index, occupied| generate_diagonal_moves(index, *occupied),
-        occupied)
+    iterate_possible_move(ally.queens, ally, enemy, 0,  
+        |index, occupied| generate_diagonal_moves(index, *occupied),
+        occupied, &mut moves
     );
 
-    moves.append(
-        &mut iterate_possible_move(ally.rooks, ally, enemy, 0,  |index, occupied| generate_straight_moves(index, *occupied),
-        occupied)
+    iterate_possible_move(ally.rooks, ally, enemy, 0,  
+        |index, occupied| generate_straight_moves(index, *occupied),
+        occupied, &mut moves
     );
 
-    moves.append(
-        &mut iterate_possible_move(ally.queens , ally , enemy , 0 , |index , occupied| generate_straight_moves(index , *occupied) , occupied)
+    iterate_possible_move(ally.queens, ally, enemy, 0, 
+        |index, occupied| generate_straight_moves(index, *occupied),
+        occupied, &mut moves
     );
 
-    moves.append(
-        &mut iterate_possible_move(ally.knights , ally , enemy , 0 , |index , _ | generate_knight_moves(index) , ())
+    iterate_possible_move(ally.knights, ally, enemy, 0, 
+        |index, _| generate_knight_moves(index),
+        (), &mut moves
     );
 
-    moves.append(
-        &mut iterate_possible_move(ally.pawns , ally , enemy ,  1 ,
-            |index , args| {
-                let (occupied, turn , double_pawn_push) = *args;
-                generate_pawn_moves(index, occupied, turn as usize , double_pawn_push)
-            },(occupied, turn , enemy.double_push_pawns)
-        )
+    iterate_possible_move(ally.pawns, ally, enemy, 1,
+        |index, args| {
+            let (occupied, turn, double_pawn_push) = *args;
+            generate_pawn_moves(index, occupied, turn as usize, double_pawn_push)
+        },
+        (occupied, turn, enemy.double_push_pawns),
+        &mut moves
     );
     
-    moves.append(
-        &mut iterate_possible_move(ally.kings , ally , enemy ,  2 ,
-            |index , args| {
-                let (occupied, castle_rooks, turn) = *args;
-                generate_king_moves(index, occupied, castle_rooks, turn , enemy.attack_map)
-            },(occupied, ally.castle_rooks, turn)
-        )
+    iterate_possible_move(ally.kings, ally, enemy, 2,
+        |index, args| {
+            let (occupied, castle_rooks, turn) = *args;
+            generate_king_moves(index, occupied, castle_rooks, turn, enemy.attack_map)
+        },
+        (occupied, ally.castle_rooks, turn),
+        &mut moves
     );
 
     moves
@@ -182,16 +183,7 @@ pub fn apply_normal_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16)
     let src = mov as usize & 0x3F;
     let dest = (mov as usize >> 6) & 0x3F;
 
-    // let src_piece_type  = get_piece_type(ally_pieces, src).unwrap();
-
-    let src_piece_type = match get_piece_type(ally_pieces, src) {
-        Some(piece_type) => piece_type,
-        _ => {
-            print_board(board);
-            print_move(&mov);
-            panic!();
-        }
-    };
+    let src_piece_type  = get_piece_type(ally_pieces, src).unwrap();
 
     let rooks = ally_pieces.castle_rooks;
 

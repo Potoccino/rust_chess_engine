@@ -1,6 +1,4 @@
 
-use std::{usize, vec};
-
 use crate::{attack_maps::{DIAGONAL_RAYS, KING_ATTACKS, KNIGHT_JUMPS, PAWN_CAPTURES, PAWN_PUSH, STRAIGHT_RAYS}, piece_set::PieceSet, utils::{flip_bit, get_lsb, test_bit}};
 
 
@@ -129,10 +127,8 @@ pub fn generate_king_moves(index : usize , occupied : u64 , castle_rooks : u64 ,
 
 
 pub fn iterate_move_map( piece_set : &PieceSet , src_index : usize,
-    moves_for_piece : &mut u64  , mode : u8 ) ->  Vec<u16>{
+    moves_for_piece : &mut u64  , mode : u8 , moves : &mut  Vec<u16> ){
     
-    let mut moves : Vec<u16> = vec![];
-
     loop {
         let dis_index = get_lsb(*moves_for_piece) ;
         if dis_index == 64 {
@@ -176,8 +172,6 @@ pub fn iterate_move_map( piece_set : &PieceSet , src_index : usize,
 
         flip_bit(moves_for_piece , dis_index as usize);
     }
-
-    moves
 }
 
 
@@ -188,12 +182,10 @@ pub fn iterate_possible_move< F , T>(
     mode : u8 ,
     generation_function : F , 
     args : T ,
-) -> Vec<u16> 
+    moves : &mut  Vec<u16>,
+) 
 where 
-    F : Fn(usize , &T) -> u64 {
-    let mut moves : Vec<u16> = vec![];
-    
-    
+    F : Fn(usize , &T) -> u64 {    
     loop {
         let index = get_lsb(piece_positions);
         if index == 64{
@@ -201,14 +193,10 @@ where
         }
 
         let mut moves_for_piece = generation_function(index , &args) & (!ally.occupied);
-        moves.append(
-            &mut iterate_move_map(&enemy, index, &mut moves_for_piece, mode)
-        );
+        iterate_move_map(&enemy, index, &mut moves_for_piece, mode , moves);
 
         flip_bit(&mut piece_positions, index);
     }
-
-    moves
 }
 
 
