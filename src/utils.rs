@@ -251,3 +251,129 @@ pub fn fen_to_bitboard(fen: &str) -> Result<(BitBoard , bool), String> {
     
     Ok((board , turn))
 }
+
+
+pub fn bitboard_to_fen(board: &BitBoard, turn: bool) -> String {
+    let mut fen = String::new();
+    
+    // Generate the board representation
+    for rank in (0..8).rev() {  // Start from the 8th rank (index 7) going down
+        let mut empty_squares = 0;
+        
+        for file in 0..8 {
+            let square_index = rank * 8 + file;
+            let bit = 1u64 << square_index;
+            
+            if (board.white_set.occupied | board.black_set.occupied) & bit != 0 {
+                // If we had empty squares before this piece, add the count
+                if empty_squares > 0 {
+                    fen.push_str(&empty_squares.to_string());
+                    empty_squares = 0;
+                }
+                
+                // Determine which piece is on this square
+                let piece_char = if board.white_set.occupied & bit != 0 {
+                    // White piece
+                    if board.white_set.pawns & bit != 0 { 'P' }
+                    else if board.white_set.knights & bit != 0 { 'N' }
+                    else if board.white_set.bishops & bit != 0 { 'B' }
+                    else if board.white_set.rooks & bit != 0 { 'R' }
+                    else if board.white_set.queens & bit != 0 { 'Q' }
+                    else if board.white_set.kings & bit != 0 { 'K' }
+                    else { panic!("Invalid piece configuration at square {}", square_index) }
+                } else {
+                    // Black piece
+                    if board.black_set.pawns & bit != 0 { 'p' }
+                    else if board.black_set.knights & bit != 0 { 'n' }
+                    else if board.black_set.bishops & bit != 0 { 'b' }
+                    else if board.black_set.rooks & bit != 0 { 'r' }
+                    else if board.black_set.queens & bit != 0 { 'q' }
+                    else if board.black_set.kings & bit != 0 { 'k' }
+                    else { panic!("Invalid piece configuration at square {}", square_index) }
+                };
+                
+                fen.push(piece_char);
+            } else {
+                // Empty square
+                empty_squares += 1;
+            }
+        }
+        
+        // If there are empty squares at the end of the rank
+        if empty_squares > 0 {
+            fen.push_str(&empty_squares.to_string());
+        }
+        
+        // Add rank separator, except for the last rank
+        if rank > 0 {
+            fen.push('/');
+        }
+    }
+    
+    // Add active color
+    fen.push(' ');
+    fen.push(if turn { 'b' } else { 'w' });
+    
+    // Add castling rights
+    fen.push(' ');
+    let mut has_castling_rights = false;
+    
+    if board.white_set.castle_rooks & (1u64 << 7) != 0 {
+        fen.push('K');
+        has_castling_rights = true;
+    }
+    if board.white_set.castle_rooks & 1u64 != 0 {
+        fen.push('Q');
+        has_castling_rights = true;
+    }
+    if board.black_set.castle_rooks & (1u64 << 63) != 0 {
+        fen.push('k');
+        has_castling_rights = true;
+    }
+    if board.black_set.castle_rooks & (1u64 << 56) != 0 {
+        fen.push('q');
+        has_castling_rights = true;
+    }
+    if !has_castling_rights {
+        fen.push('-');
+    }
+    
+    // Add en passant target square
+    fen.push(' ');
+    let mut has_en_passant = false;
+    
+    // Check white double push pawns
+    if board.white_set.double_push_pawns != 0 {
+        // Find the file of the double pushed pawn
+        let pawn_index = board.white_set.double_push_pawns.trailing_zeros() as usize;
+        let file = pawn_index % 8;
+        // En passant square is behind the pawn (from white's perspective)
+        let ep_rank = 2; // 3rd rank (index 2)
+        
+        fen.push((file as u8 + b'a') as char);
+        fen.push((ep_rank as u8 + b'1') as char);
+        has_en_passant = true;
+    }
+    // Check black double push pawns
+    else if board.black_set.double_push_pawns != 0 {
+        // Find the file of the double pushed pawn
+        let pawn_index = board.black_set.double_push_pawns.trailing_zeros() as usize;
+        let file = pawn_index % 8;
+        // En passant square is behind the pawn (from black's perspective)
+        let ep_rank = 5; // 6th rank (index 5)
+        
+        fen.push((file as u8 + b'a') as char);
+        fen.push((ep_rank as u8 + b'1') as char);
+        has_en_passant = true;
+    }
+    
+    if !has_en_passant {
+        fen.push('-');
+    }
+    
+    // Add halfmove clock and fullmove number
+    // Since these aren't tracked in the BitBoard structure, we'll add default values
+    fen.push_str(" 0 1");
+    
+    fen
+}

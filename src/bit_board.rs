@@ -2,7 +2,7 @@ use std::hash::{Hasher , Hash};
 
 use crate:: piece_set::PieceSet;
 
-#[derive(PartialEq)]
+#[derive(Eq, Hash, PartialEq , Debug )]
 pub enum PieceType {
     Pawn,
     Knight,

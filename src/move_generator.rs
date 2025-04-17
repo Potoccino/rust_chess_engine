@@ -1,5 +1,5 @@
 
-use crate::{attack_maps::{DIAGONAL_RAYS, KING_ATTACKS, KNIGHT_JUMPS, PAWN_CAPTURES, PAWN_PUSH, STRAIGHT_RAYS}, piece_set::PieceSet, utils::{flip_bit, get_lsb, test_bit}};
+use crate::{attack_maps::{DIAGONAL_RAYS, KING_ATTACKS, KNIGHT_JUMPS, PAWN_CAPTURES, PAWN_PUSH, STRAIGHT_RAYS}, piece_set::PieceSet, utils::{flip_bit, get_lsb, print_bitset, test_bit}};
 
 
 
@@ -18,15 +18,19 @@ const DOUBLE_PAWN_PUSH : u16= 8;
 const WHITE_KING_START: usize = 4;
 const BLACK_KING_START: usize = 60;
 
-const WHITE_KINGSIDE_MASK: u64 = 0x60; 
-const WHITE_QUEENSIDE_MASK: u64 = 0x0E;
+const WHITE_KINGSIDE_MASK: u64 = 1u64 << 5 | 1u64 << 6; 
 const WHITE_KINGSIDE_MASK_WITH_KING : u64 = WHITE_KINGSIDE_MASK | 1 << 4;
-const WHITE_QUEENSIDE_MASK_WITH_KING : u64 = WHITE_QUEENSIDE_MASK | 1 << 4;
+
+const WHITE_QUEENSIDE_MASK: u64 = 1 << 1 | 1 << 2 | 1 << 3;
+const WHITE_SHORT_QUEENSIDE_MASK: u64 = 1 << 2 | 1 << 3;
+const WHITE_QUEENSIDE_MASK_WITH_KING : u64 = WHITE_SHORT_QUEENSIDE_MASK | 1 << 4;
 
 const BLACK_KINGSIDE_MASK: u64 = 1u64 << 61 | 1u64 << 62;
-const BLACK_QUEENSIDE_MASK: u64 = 1u64 << 59 | 1u64 << 58 | 1u64 << 57;
 const BLACK_KINGSIDE_MASK_WITH_KING : u64 = BLACK_KINGSIDE_MASK | 1u64 << 60;
-const BLACK_QUEENSIDE_MASK_WITH_KING : u64= BLACK_QUEENSIDE_MASK | 1u64 << 60;
+
+const BLACK_QUEENSIDE_MASK: u64 = 1u64 << 57 | 1u64 << 59 | 1u64 << 58 ;
+const BLACK_SHORT_QUEENSIDE_MASK: u64 = 1u64 << 58 | 1u64 << 59;
+const BLACK_QUEENSIDE_MASK_WITH_KING : u64= BLACK_SHORT_QUEENSIDE_MASK | 1u64 << 60;
 
 pub fn generate_diagonal_moves(index : usize , occupied : u64) -> u64{
     
@@ -121,6 +125,7 @@ pub fn generate_king_moves(index : usize , occupied : u64 , castle_rooks : u64 ,
         }
         
     }
+
 
     moves
 }

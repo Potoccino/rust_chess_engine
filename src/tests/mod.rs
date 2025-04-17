@@ -6,11 +6,15 @@ mod tests {
     use std::collections::HashMap;
     use std::hash::DefaultHasher;
     use std::hash::Hash;
+    use std::vec;
+
+    use pleco::board;
 
     use super::*;
 
     use crate::bit_board::BitBoard;
     use crate::piece_set::PieceSet;
+    use crate::utils;
     use crate::utils::*;
     use crate::engine::*;
 
@@ -77,7 +81,7 @@ mod tests {
         let initial_castle_rooks = board.white_set.castle_rooks;
         
         // Act
-        let saved_castle_rooks = apply_castle_move(&mut board, false, king_side_castle);
+        let saved_castle_rooks = apply_castle_move(&mut board, false, king_side_castle).0;
         
         // Assert
         assert_eq!(saved_castle_rooks, initial_castle_rooks); // Check that returned value matches initial value
@@ -87,7 +91,7 @@ mod tests {
         assert_eq!(board.white_set.castle_rooks, 0); // Castle rooks should be 0
         
         // Test unapply
-        unapply_castle_move(&mut board, false, king_side_castle, saved_castle_rooks);
+        unapply_castle_move(&mut board, false, king_side_castle, saved_castle_rooks , 0);
         
         assert_eq!(board.white_set.kings, 1u64 << 4); // King should be at e1   
         assert_eq!(board.white_set.rooks, (1u64 << 0) | (1u64 << 7)); // Rooks at a1 and h1
@@ -113,7 +117,7 @@ mod tests {
         let initial_castle_rooks = board.white_set.castle_rooks;
         
         // Act
-        let saved_castle_rooks = apply_castle_move(&mut board, false, queen_side_castle);
+        let saved_castle_rooks = apply_castle_move(&mut board, false, queen_side_castle).0;
         
         // Assert
         assert_eq!(saved_castle_rooks, initial_castle_rooks); // Check that returned value matches initial value
@@ -123,7 +127,7 @@ mod tests {
         assert_eq!(board.white_set.castle_rooks, 0); // Castle rooks should be 0
         
         // Test unapply
-        unapply_castle_move(&mut board, false, queen_side_castle, saved_castle_rooks);
+        unapply_castle_move(&mut board, false, queen_side_castle, saved_castle_rooks , 0);
         
         // The board should be completely identical to the initial board
         assert!(compare_boards(&board, &initial_board));
@@ -140,7 +144,7 @@ mod tests {
         let initial_castle_rooks = board.black_set.castle_rooks;
         
         // Act
-        let saved_castle_rooks = apply_castle_move(&mut board, true, king_side_castle);
+        let saved_castle_rooks = apply_castle_move(&mut board, true, king_side_castle).0;
         
         // Assert
         assert_eq!(saved_castle_rooks, initial_castle_rooks); // Check that returned value matches initial value
@@ -150,7 +154,7 @@ mod tests {
         assert_eq!(board.black_set.castle_rooks, 0); // Castle rooks should be 0
         
         // Test unapply
-        unapply_castle_move(&mut board, true, king_side_castle, saved_castle_rooks);
+        unapply_castle_move(&mut board, true, king_side_castle, saved_castle_rooks,0);
         
         // The board should be completely identical to the initial board
         assert!(compare_boards(&board, &initial_board));
@@ -167,7 +171,7 @@ mod tests {
         let initial_castle_rooks = board.black_set.castle_rooks;
         
         // Act
-        let saved_castle_rooks = apply_castle_move(&mut board, true, queen_side_castle);
+        let saved_castle_rooks = apply_castle_move(&mut board, true, queen_side_castle).0;
         
         // Assert
         assert_eq!(saved_castle_rooks, initial_castle_rooks); // Check that returned value matches initial value
@@ -177,7 +181,7 @@ mod tests {
         assert_eq!(board.black_set.castle_rooks, 0); // Castle rooks should be 0
         
         // Test unapply
-        unapply_castle_move(&mut board, true, queen_side_castle, saved_castle_rooks);
+        unapply_castle_move(&mut board, true, queen_side_castle, saved_castle_rooks , 0);
         
         // The board should be completely identical to the initial board
         assert!(compare_boards(&board, &initial_board));
@@ -195,7 +199,7 @@ mod tests {
         
         // White kingside castle
         let white_king_castle = CASTLE_KING << 12;
-        let saved_white_castle_rooks = apply_castle_move(&mut board, false, white_king_castle);
+        let saved_white_castle_rooks = apply_castle_move(&mut board, false, white_king_castle).0;
         
         // Verify white castle_rooks is now 0
         assert_eq!(board.white_set.castle_rooks, 0);
@@ -203,19 +207,19 @@ mod tests {
         
         // Black queenside castle
         let black_queen_castle = CASTLE_QUEEN << 12;
-        let saved_black_castle_rooks = apply_castle_move(&mut board, true, black_queen_castle);
+        let saved_black_castle_rooks = apply_castle_move(&mut board, true, black_queen_castle).0;
         
         // Verify black castle_rooks is now 0
         assert_eq!(board.black_set.castle_rooks, 0);
         assert_eq!(saved_black_castle_rooks, black_initial_castle_rooks);
         
         // Now unapply in reverse order
-        unapply_castle_move(&mut board, true, black_queen_castle, saved_black_castle_rooks);
+        unapply_castle_move(&mut board, true, black_queen_castle, saved_black_castle_rooks,0);
         
         // Verify black castle_rooks is restored
         assert_eq!(board.black_set.castle_rooks, black_initial_castle_rooks);
         
-        unapply_castle_move(&mut board, false, white_king_castle, saved_white_castle_rooks);
+        unapply_castle_move(&mut board, false, white_king_castle, saved_white_castle_rooks,0);
         
         // Verify white castle_rooks is restored
         assert_eq!(board.white_set.castle_rooks, white_initial_castle_rooks);
@@ -237,14 +241,14 @@ mod tests {
         
         // Do kingside castle
         let king_side_castle = CASTLE_KING << 12;
-        let saved_castle_rooks = apply_castle_move(&mut board, false, king_side_castle);
+        let saved_castle_rooks = apply_castle_move(&mut board, false, king_side_castle).0;
         
         // Verify saved value
         assert_eq!(saved_castle_rooks, 1u64 << 7);
         assert_eq!(board.white_set.castle_rooks, 0);
         
         // Unapply
-        unapply_castle_move(&mut board, false, king_side_castle, saved_castle_rooks);
+        unapply_castle_move(&mut board, false, king_side_castle, saved_castle_rooks,0);
         
         // Verify restoration
         assert_eq!(board.white_set.castle_rooks, 1u64 << 7);
@@ -271,7 +275,7 @@ mod tests {
         let initial_double_push_pawns = board.white_set.double_push_pawns;
         
         // Apply move
-        apply_double_pawn_push(&mut board, false, mov);
+        let res = apply_double_pawn_push(&mut board, false, mov);
         
         // Check that the double push was applied correctly
         assert_eq!(get_bit(board.white_set.pawns, src), false, "Pawn should be removed from src");
@@ -284,7 +288,7 @@ mod tests {
         assert_eq!(board.white_set.double_push_pawns, 1u64 << 20, "Double push flag should be set at e3");
         
         // Unapply move
-        unapply_doublw_pawn_push(&mut board, false, mov);
+        unapply_double_pawn_push(&mut board, false, mov , 0 );
         
         // Check that the board is restored to its initial state
         assert_eq!(board.white_set.pawns, initial_white_pawns, "Pawns should be restored to initial state");
@@ -322,7 +326,7 @@ mod tests {
         assert_eq!(board.black_set.double_push_pawns, 1u64 << 44, "Double push flag should be set at e6");
         
         // Unapply move
-        unapply_doublw_pawn_push(&mut board, true, mov);
+        unapply_double_pawn_push(&mut board, true, mov , 0);
         
         // Check that the board is restored to its initial state
         assert_eq!(board.black_set.pawns, initial_black_pawns, "Black pawns should be restored to initial state");
@@ -333,7 +337,7 @@ mod tests {
 
     
 
-    fn preft_helper(mut board :  &mut BitBoard , turn : bool , depth : i32 , hash_map : & mut HashMap<BitBoard , u64>) -> u64{
+    fn preft_helper(mut board :  &mut BitBoard , turn : bool , depth : i32 ) -> u64{
         if depth == 0 {
             return 1;
         }
@@ -346,11 +350,9 @@ mod tests {
 
         for mov in moves {
             let mov_result = apply_move(&mut board, turn, mov);
-            if king_in_check(&board, turn) {
-                unapply_move(&mut board, turn, mov, mov_result);
-                continue;
+            if !king_in_check(&board, turn) {
+                move_count += preft_helper(board, !turn, depth - 1 );
             }
-            move_count += preft_helper(board, !turn, depth - 1 , hash_map);
             unapply_move(&mut board, turn, mov, mov_result);
         }
 
@@ -358,13 +360,39 @@ mod tests {
     }
 
     #[test]
-    fn perft_test(){
-        let mut board = BitBoard::get_starting_board();
-        let mut hash_map : HashMap<BitBoard, u64> = HashMap::new();
+    fn test_move_generation_with_perft_positions(){
+       // positions from https://www.chessprogramming.org/Perft_Results
+
+        let fen_strings = vec![
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+            "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+            "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+            "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
+        ];
+
+        let depth_and_results = vec![
+            (6	, 119060324	),
+            (5	, 193690690	),
+            (6	, 11030083),
+            (5	, 15833292),
+            (5	, 89941194),
+            (5	, 164075551)
+        ];
 
 
-        let move_count = preft_helper(&mut board, false, 4 , &mut hash_map);
-        println!("{}" , move_count);
+        for (i, fen) in fen_strings.iter().enumerate() {
+            let (depth, expected_count) = depth_and_results[i];
+            let (mut board , turn)= utils::fen_to_bitboard(fen).unwrap();
+            let move_count = preft_helper(&mut board , turn , depth  );
+
+            if move_count != expected_count {
+                println!("Failed for FEN {} at depth : {}", fen , depth);
+                println!("Expected: {}, Got: {}", expected_count, move_count);
+            }
+            assert_eq!(move_count, expected_count);
+        }
 
     }
 

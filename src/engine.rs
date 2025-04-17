@@ -1,4 +1,8 @@
-use crate::{attack_maps::{DIAGONAL_RAYS, KNIGHT_JUMPS, STRAIGHT_RAYS}, bit_board::{BitBoard, PieceType}, move_generator::{generate_diagonal_moves, generate_king_attacks, generate_king_moves, generate_knight_moves, generate_pawn_attacks, generate_pawn_moves, generate_straight_moves, iterate_attack_moves, iterate_possible_move}, piece_set::{self, PieceSet}, utils::{flip_bit, get_lsb, print_bitset, print_board, print_move, read_move_components, reset_bit, set_bit, test_bit}};
+use crate::{attack_maps::{DIAGONAL_RAYS, KING_ATTACKS, KNIGHT_JUMPS, STRAIGHT_RAYS}, 
+bit_board::{BitBoard, PieceType}, 
+move_generator::{generate_diagonal_moves, generate_king_attacks, generate_king_moves, generate_knight_moves,
+     generate_pawn_attacks, generate_pawn_moves, generate_straight_moves, iterate_attack_moves, iterate_possible_move}, 
+     piece_set::PieceSet, utils::{flip_bit, get_lsb, print_bitset, print_board, read_move_components, reset_bit, set_bit, test_bit}};
 
 
 const KNIGHT_PROMOTED : u16 = 1;
@@ -15,10 +19,10 @@ const DOUBLE_PAWN_PUSH : u16= 8;
 
 
 pub enum MoveResult {
-    Value(u64),
-    Promotions(PieceType, Option<PieceType>),
-    Normal(PieceType, Option<PieceType> , u64),
-    None(),
+    Value(u64 , u64),
+    Promotions(PieceType, Option<PieceType> , u64 , u64),
+    Normal(PieceType, Option<PieceType> , u64 , u64 , u64),
+    None(u64),
 }
 
 
@@ -28,64 +32,76 @@ pub fn king_in_check<>( board : &BitBoard  , turn : bool) -> bool {
     let enemy : &PieceSet = if turn == false {&board.black_set} else {&board.white_set};
 
     let king_index = get_lsb(ally.kings);
+    let enemey_king_index = get_lsb(enemy.kings);
 
 
+    if (1u64 << king_index) & KING_ATTACKS[enemey_king_index] != 0 {
+        return true;
+    }
+
+    
     if KNIGHT_JUMPS[king_index] & enemy.knights != 0 {
         return  true;
     }
-
+    
     let occupied = ally.occupied | enemy.occupied;
     let mut on_same_file : u64 = 0;
     
     for i in 0..4 {
         on_same_file |= STRAIGHT_RAYS[i][king_index] & (enemy.rooks | enemy.queens);
     }
-
-
+    
     loop {
         let index = get_lsb(on_same_file) ;
         if index == 64 {
             break;
         }
-
-        if generate_straight_moves(index, occupied) & king_index as u64 != 0 {
+        
+        if generate_straight_moves(index, occupied) & ((1 as u64) << king_index) as u64 != 0 {
             return true
         }
-
+        
         flip_bit(&mut on_same_file, index);
     }
-
+    
     let mut on_same_diagonal : u64 = 0;
     for i in 0..4 {
         on_same_diagonal |= DIAGONAL_RAYS[i][king_index] & (enemy.bishops | enemy.queens);
     }
-
+    
     loop {
         let index = get_lsb(on_same_diagonal);
         if index == 64 {
             break;
         }
-
-        if generate_diagonal_moves(index, occupied) & king_index as u64 != 0 {
+        
+        if generate_diagonal_moves(index, occupied) & ((1 as u64 ) << king_index) as u64 != 0 {
             return true;
         }
+        flip_bit(&mut on_same_diagonal, index);
     }
-
-    let attack_direction :i8 = if turn {-8} else {8};
-
+    
+    let attack_direction :i8 = if turn {-8 + king_index as i8 } else {8 + king_index as i8 };
+    
     if attack_direction < 0 || attack_direction > 63 {
         return false;
     }
+    
+    if king_index & 0b111 != 0b111  && test_bit(enemy.pawns , attack_direction as usize + 1){
+        return true;
+    }
 
-    test_bit(enemy.pawns, king_index + attack_direction as usize - 1)
-    | test_bit(enemy.pawns, king_index + attack_direction as usize + 1) 
+    if king_index & 0b111 != 0  && test_bit(enemy.pawns , attack_direction as usize - 1){
+        return true;
+    }
 
+    return false    
 }
 
 
 pub fn generate_moves(board : &BitBoard , turn : bool) -> Vec<u16> {
     let mut moves : Vec<u16> = Vec::new();
-
+    
     let ally : &PieceSet = if turn == false {&board.white_set} else {&board.black_set};
     let enemy : &PieceSet = if turn == false {&board.black_set} else {&board.white_set};
 
@@ -101,12 +117,12 @@ pub fn generate_moves(board : &BitBoard , turn : bool) -> Vec<u16> {
         occupied, &mut moves
     );
 
-    iterate_possible_move(ally.rooks, ally, enemy, 0,  
+    iterate_possible_move(ally.queens, ally, enemy, 0, 
         |index, occupied| generate_straight_moves(index, *occupied),
         occupied, &mut moves
     );
 
-    iterate_possible_move(ally.queens, ally, enemy, 0, 
+    iterate_possible_move(ally.rooks, ally, enemy, 0,  
         |index, occupied| generate_straight_moves(index, *occupied),
         occupied, &mut moves
     );
@@ -134,10 +150,11 @@ pub fn generate_moves(board : &BitBoard , turn : bool) -> Vec<u16> {
         &mut moves
     );
 
+
     moves
 }
 
-fn get_piece_type(pieces : &PieceSet, index : usize) -> Option<PieceType> {
+pub fn get_piece_type(pieces : &PieceSet, index : usize) -> Option<PieceType> {
     if pieces.rooks & (1u64 << index) != 0 {
         Some(PieceType::Rook)
     }
@@ -172,7 +189,7 @@ fn get_piece_bitset<'a>(pieces: &'a mut PieceSet, piece_type: &PieceType) -> &'a
 }
 
 
-pub fn apply_normal_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16) -> (PieceType, Option<PieceType> , u64) {
+pub fn apply_normal_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16) -> (PieceType, Option<PieceType> , u64 , u64, u64) {
 
     let (ally_pieces,  enemy_pieces) = if turn == false {
         (&mut board.white_set, &mut board.black_set)
@@ -185,7 +202,8 @@ pub fn apply_normal_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16)
 
     let src_piece_type  = get_piece_type(ally_pieces, src).unwrap();
 
-    let rooks = ally_pieces.castle_rooks;
+    let ally_rooks = ally_pieces.castle_rooks;
+    let enemy_rooks = enemy_pieces.castle_rooks;
 
     if src_piece_type == PieceType::King {
         ally_pieces.castle_rooks = 0;
@@ -206,24 +224,31 @@ pub fn apply_normal_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16)
     set_bit(&mut ally_pieces.occupied, dest);
 
     if let Some(piece_type) = dest_piece_type.as_ref() {
+        if piece_type == &PieceType::Rook {
+            reset_bit(&mut enemy_pieces.castle_rooks, dest);
+        }
         reset_bit(&mut enemy_pieces.occupied, dest);
         let dest_piece = get_piece_bitset(enemy_pieces, piece_type);
         reset_bit(dest_piece, dest);
     }
 
+    let enemy_double_push_pawns = enemy_pieces.double_push_pawns;
+    enemy_pieces.double_push_pawns = 0;
 
-    (src_piece_type , dest_piece_type , rooks)
+    (src_piece_type , dest_piece_type , ally_rooks , enemy_rooks , enemy_double_push_pawns)
 }
 
 
-pub fn unapply_normal_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16, src_piece_type : PieceType, dest_piece_type : Option<PieceType> , castle_rooks : u64) {
+pub fn unapply_normal_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16, src_piece_type : PieceType, dest_piece_type : Option<PieceType> , ally_rooks : u64,
+        enemy_rooks : u64 , enemy_double_pawn_push : u64) {
     let (ally_pieces,  enemy_pieces) = if turn == false {
         (&mut board.white_set, &mut board.black_set)
     } else {
         (&mut board.black_set, &mut board.white_set)
     };
 
-    ally_pieces.castle_rooks = castle_rooks;
+    ally_pieces.castle_rooks = ally_rooks;
+    enemy_pieces.castle_rooks = enemy_rooks;
 
     let src = mov as usize & 0x3F;
     let dest = (mov as usize >> 6) & 0x3F;
@@ -242,74 +267,97 @@ pub fn unapply_normal_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u1
         set_bit(dest_bitest, dest);
         set_bit(&mut enemy_pieces.occupied, dest);
     }
+
+    enemy_pieces.double_push_pawns = enemy_double_pawn_push;
 }
 
 
-pub fn apply_castle_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16) -> u64 {
-    let ally_pieces = if turn == false {
-        &mut board.white_set
+pub fn apply_castle_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16) -> (u64 , u64) {
+    let (ally_pieces,  enemy_pieces) = if turn == false {
+        (&mut board.white_set, &mut board.black_set)
     } else {
-        &mut board.black_set
+        (&mut board.black_set, &mut board.white_set)
     };
+
     let king_index = get_lsb(ally_pieces.kings);
 
     if mov >> 12 == CASTLE_KING {
-        set_bit(&mut ally_pieces.kings, king_index + 2);
         reset_bit(&mut ally_pieces.kings, king_index);
-        set_bit(&mut ally_pieces.rooks, king_index + 1);
+        reset_bit(&mut ally_pieces.occupied, king_index);
+        
         reset_bit(&mut ally_pieces.rooks, king_index + 3);
-        set_bit(&mut ally_pieces.occupied, king_index + 2);
-        reset_bit(&mut ally_pieces.occupied, king_index);
-        set_bit(&mut ally_pieces.occupied, king_index + 1);
         reset_bit(&mut ally_pieces.occupied, king_index + 3);
+        
+        set_bit(&mut ally_pieces.kings, king_index + 2);
+        set_bit(&mut ally_pieces.occupied, king_index + 2);
+
+        set_bit(&mut ally_pieces.rooks, king_index + 1);
+        set_bit(&mut ally_pieces.occupied, king_index + 1);
+        
     } else {
-        set_bit(&mut ally_pieces.kings, king_index - 2);
         reset_bit(&mut ally_pieces.kings, king_index);
-        set_bit(&mut ally_pieces.rooks, king_index - 1);
-        reset_bit(&mut ally_pieces.rooks, king_index - 4);
-        set_bit(&mut ally_pieces.occupied, king_index - 2);
         reset_bit(&mut ally_pieces.occupied, king_index);
-        set_bit(&mut ally_pieces.occupied, king_index - 1);
+        
+        reset_bit(&mut ally_pieces.rooks, king_index - 4);
         reset_bit(&mut ally_pieces.occupied, king_index - 4);
+        
+        set_bit(&mut ally_pieces.kings, king_index - 2);
+        set_bit(&mut ally_pieces.occupied, king_index - 2);
+        
+        set_bit(&mut ally_pieces.rooks, king_index - 1);
+        set_bit(&mut ally_pieces.occupied, king_index - 1);
     }
     let castle_rooks = ally_pieces.castle_rooks;
     ally_pieces.castle_rooks = 0;
-    castle_rooks
+    
+    let enemy_double_push_pawns = enemy_pieces.double_push_pawns;
+    enemy_pieces.double_push_pawns = 0;
+
+    
+    (castle_rooks , enemy_double_push_pawns)
 }
 
 
-pub fn unapply_castle_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16 , castle_rooks : u64){
-    let ally_pieces = if turn == false {
-        &mut board.white_set
+pub fn unapply_castle_move<'a>(board : &'a mut BitBoard , turn : bool , mov : u16 , castle_rooks : u64 , enemy_double_pawn_push : u64) {
+    let (ally_pieces,  enemy_pieces) = if turn == false {
+        (&mut board.white_set, &mut board.black_set)
     } else {
-        &mut board.black_set
+        (&mut board.black_set, &mut board.white_set)
     };
     let king_index = get_lsb(ally_pieces.kings);
 
     if mov >> 12 == CASTLE_KING {
         reset_bit(&mut ally_pieces.kings, king_index );
-        set_bit(&mut ally_pieces.kings, king_index - 2);
-        reset_bit(&mut ally_pieces.rooks, king_index - 1);
-        set_bit(&mut ally_pieces.rooks, king_index + 1);
         reset_bit(&mut ally_pieces.occupied, king_index );
-        set_bit(&mut ally_pieces.occupied, king_index - 2);
+        
+        reset_bit(&mut ally_pieces.rooks, king_index - 1);
         reset_bit(&mut ally_pieces.occupied, king_index - 1);
+
+        set_bit(&mut ally_pieces.kings, king_index - 2);
+        set_bit(&mut ally_pieces.occupied, king_index - 2);
+        
+        set_bit(&mut ally_pieces.rooks, king_index + 1);
         set_bit(&mut ally_pieces.occupied, king_index + 1);
     } else {
         reset_bit(&mut ally_pieces.kings, king_index);
-        set_bit(&mut ally_pieces.kings, king_index + 2);
-        reset_bit(&mut ally_pieces.rooks, king_index + 1);
-        set_bit(&mut ally_pieces.rooks, king_index - 2);
         reset_bit(&mut ally_pieces.occupied, king_index);
-        set_bit(&mut ally_pieces.occupied, king_index + 2);
+        
+        reset_bit(&mut ally_pieces.rooks, king_index + 1);
         reset_bit(&mut ally_pieces.occupied, king_index + 1);
+        
+        set_bit(&mut ally_pieces.rooks, king_index - 2);
         set_bit(&mut ally_pieces.occupied, king_index - 2);
+        
+        set_bit(&mut ally_pieces.kings, king_index + 2);
+        set_bit(&mut ally_pieces.occupied, king_index + 2);
     }
     ally_pieces.castle_rooks = castle_rooks;
+    enemy_pieces.double_push_pawns = enemy_double_pawn_push;
+
 }
 
 
-pub fn apply_promotion(board : & mut BitBoard , turn : bool , mov : u16) ->  (PieceType , Option<PieceType>) {
+pub fn apply_promotion(board : & mut BitBoard , turn : bool , mov : u16) ->  (PieceType , Option<PieceType> , u64 ,  u64) {
     let (ally_pieces,  enemy_pieces) = if turn == false {
         (&mut board.white_set, &mut board.black_set)
     } else {
@@ -319,7 +367,7 @@ pub fn apply_promotion(board : & mut BitBoard , turn : bool , mov : u16) ->  (Pi
     let src = mov as usize & 0x3F;
     let dest = (mov as usize >> 6) & 0x3F;
 
-    let dest_piece_type =get_piece_type(&enemy_pieces, dest);
+    let dest_piece_type = get_piece_type(&enemy_pieces, dest);
 
     let promotion_type = match mov >> 12 {
         KNIGHT_PROMOTED => PieceType::Knight,
@@ -330,24 +378,33 @@ pub fn apply_promotion(board : & mut BitBoard , turn : bool , mov : u16) ->  (Pi
     };
 
     
+    let enemy_rooks = enemy_pieces.castle_rooks;
+
     reset_bit(&mut ally_pieces.pawns, src);
     reset_bit(&mut ally_pieces.occupied, src);
-    set_bit(&mut ally_pieces.occupied, dest);
     
+    set_bit(&mut ally_pieces.occupied, dest);
     let promoted_bitset = get_piece_bitset(ally_pieces, &promotion_type);
     set_bit(promoted_bitset, dest);
 
     if let Some(piece_type) = dest_piece_type.as_ref() {
+        if piece_type == &PieceType::Rook {
+            reset_bit(&mut enemy_pieces.castle_rooks, dest);
+        }
         let dest_piece = get_piece_bitset(enemy_pieces, piece_type);
         reset_bit(dest_piece, dest);
         reset_bit(&mut enemy_pieces.occupied, dest);
     }
+    
+    let enemy_double_push_pawns = enemy_pieces.double_push_pawns;
+    enemy_pieces.double_push_pawns = 0;
 
-    (promotion_type , dest_piece_type)
+    (promotion_type , dest_piece_type , enemy_rooks , enemy_double_push_pawns)
 }
 
 
-pub fn unapply_promotion(board : & mut BitBoard , turn : bool , mov : u16, promoted_type:PieceType, dest_piece_type : Option<PieceType>) {
+pub fn unapply_promotion(board : & mut BitBoard , turn : bool , mov : u16, promoted_type:PieceType, dest_piece_type : Option<PieceType> 
+    , enemy_rooks : u64 , enemy_double_pawn_push : u64) {
     let (ally_pieces,  enemy_pieces) = if turn == false {
         (&mut board.white_set, &mut board.black_set)
     } else {
@@ -369,9 +426,11 @@ pub fn unapply_promotion(board : & mut BitBoard , turn : bool , mov : u16, promo
         set_bit(dest_piece, dest);
         set_bit(&mut enemy_pieces.occupied, dest);
     }
+
+    enemy_pieces.double_push_pawns = enemy_double_pawn_push;
 }
 
-pub fn apply_enpessant(board : & mut BitBoard , turn : bool , mov : u16) ->  u64 {
+pub fn apply_enpessant(board : & mut BitBoard , turn : bool , mov : u16) ->  (u64 , u64) {
     let (ally_pieces,  enemy_pieces) = if turn == false {
         (&mut board.white_set, &mut board.black_set)
     } else {
@@ -381,19 +440,19 @@ pub fn apply_enpessant(board : & mut BitBoard , turn : bool , mov : u16) ->  u64
     let src = mov as usize & 0x3F;
     let dest = (mov as usize >> 6) & 0x3F;
 
-    let enemy_double_push_pawns = enemy_pieces.double_push_pawns;
     let capture_direction = if turn {8} else {-8};
-
+    
     reset_bit(&mut ally_pieces.pawns, src);
     set_bit(&mut ally_pieces.pawns, dest);
     reset_bit(&mut ally_pieces.occupied, src);
     set_bit(&mut ally_pieces.occupied, dest);
-
+    
     reset_bit(&mut enemy_pieces.pawns , (dest as i32 + capture_direction )as usize);
     reset_bit(&mut enemy_pieces.occupied, (dest as i32 + capture_direction) as usize);
+    
+    let enemy_double_push_pawns = enemy_pieces.double_push_pawns;
     enemy_pieces.double_push_pawns = 0;
-
-    enemy_double_push_pawns
+    (enemy_double_push_pawns , 0)
 }
 
 
@@ -410,8 +469,9 @@ pub fn unpply_enpessant(board : & mut BitBoard , turn : bool , mov : u16, enemy_
     let capture_direction = if turn {8} else {-8};
 
     set_bit(&mut ally_pieces.pawns, src);
-    reset_bit(&mut ally_pieces.pawns, dest);
     set_bit(&mut ally_pieces.occupied, src);
+    
+    reset_bit(&mut ally_pieces.pawns, dest);
     reset_bit(&mut ally_pieces.occupied, dest);
 
     set_bit(&mut enemy_pieces.pawns , (dest as i32 + capture_direction )as usize);
@@ -421,11 +481,11 @@ pub fn unpply_enpessant(board : & mut BitBoard , turn : bool , mov : u16, enemy_
 }
 
 
-pub fn apply_double_pawn_push<'a>(board : & 'a mut BitBoard , turn : bool , mov : u16) {
-    let ally_pieces = if turn == false {
-        &mut board.white_set
+pub fn apply_double_pawn_push<'a>(board : & 'a mut BitBoard , turn : bool , mov : u16) -> u64{
+    let (ally_pieces,  enemy_pieces) = if turn == false {
+        (&mut board.white_set, &mut board.black_set)
     } else {
-        &mut board.black_set
+        (&mut board.black_set, &mut board.white_set)
     };
 
     let src = mov as usize & 0x3F;
@@ -443,22 +503,29 @@ pub fn apply_double_pawn_push<'a>(board : & 'a mut BitBoard , turn : bool , mov 
     set_bit(&mut ally_pieces.pawns, dest);
     set_bit(&mut ally_pieces.occupied, dest);
     ally_pieces.double_push_pawns = double_push_pawns;
+
+    let enemy_double_push_pawns = enemy_pieces.double_push_pawns;
+    enemy_pieces.double_push_pawns = 0;
+    enemy_double_push_pawns
+
 }
 
-pub fn unapply_doublw_pawn_push<'a>(board : & 'a mut BitBoard , turn : bool , mov : u16) {
-    let ally_pieces = if turn == false {
-        &mut board.white_set
+pub fn unapply_double_pawn_push<'a>(board : & 'a mut BitBoard , turn : bool , mov : u16 , enemy_double_pawn_push : u64) {
+    let (ally_pieces,  enemy_pieces) = if turn == false {
+        (&mut board.white_set, &mut board.black_set)
     } else {
-        &mut board.black_set
+        (&mut board.black_set, &mut board.white_set)
     };
 
+    
     let src = mov as usize & 0x3F;
     let dest = (mov as usize >> 6) & 0x3F;
-
+    
     reset_bit(&mut ally_pieces.pawns, dest);
     reset_bit(&mut ally_pieces.occupied, dest);
-
+    
     set_bit(&mut ally_pieces.pawns, src);
+    enemy_pieces.double_push_pawns = enemy_double_pawn_push;
     set_bit(&mut ally_pieces.occupied, src);
     ally_pieces.double_push_pawns = 0;
 }
@@ -467,23 +534,24 @@ pub fn unapply_doublw_pawn_push<'a>(board : & 'a mut BitBoard , turn : bool , mo
 pub fn apply_move<>(board : &  mut BitBoard , turn : bool , mov : u16) -> MoveResult {
         match mov >> 12 {
         KNIGHT_PROMOTED | BISHOP_PROMOTED | ROOK_PROMOTED | QUEEN_PROMOTED => {
-            let (promoted_piece_type, dest_piece_type) = apply_promotion(board, turn, mov);
-            MoveResult::Promotions(promoted_piece_type ,  dest_piece_type)
+            let (promoted_piece_type, dest_piece_type, enemy_rooks,enemy_double_pawn_push) = apply_promotion(board, turn, mov);
+            MoveResult::Promotions(promoted_piece_type ,  dest_piece_type , enemy_rooks , enemy_double_pawn_push)
         },
         EN_PESSANT => {
-            MoveResult::Value(apply_enpessant(board, turn, mov))  
+            let (enemy_double_push_pawn , _) = apply_enpessant(board, turn, mov);
+            MoveResult::Value(enemy_double_push_pawn , 0)  
         },
         CASTLE_KING | CASTLE_QUEEN => {
-            MoveResult::Value(apply_castle_move(board, turn, mov))
+            let (castle_rooks , enemy_double_pawn_push) = apply_castle_move(board, turn, mov);
+            MoveResult::Value(castle_rooks , enemy_double_pawn_push)
         },
         DOUBLE_PAWN_PUSH => {
-            apply_double_pawn_push(board, turn, mov);
-            MoveResult::None()
+            let enemy_double_pawn_push =  apply_double_pawn_push(board, turn, mov);
+            MoveResult::None(enemy_double_pawn_push)
         },        
         _ => {
-            let (src_piece_type , dest_piece_type , castle_rooks ) = apply_normal_move(board, turn, mov);
-
-            MoveResult::Normal(src_piece_type, dest_piece_type , castle_rooks)
+            let (src_piece_type , dest_piece_type , castle_rooks , enemy_rooks , enemy_double_pawn_push ) = apply_normal_move(board, turn, mov);
+            MoveResult::Normal(src_piece_type, dest_piece_type , castle_rooks, enemy_rooks , enemy_double_pawn_push)
         }
     }
 
@@ -492,26 +560,28 @@ pub fn apply_move<>(board : &  mut BitBoard , turn : bool , mov : u16) -> MoveRe
 pub fn unapply_move<'a>(board : & 'a mut BitBoard , turn : bool , mov : u16 , mov_result : MoveResult) {
     match mov >> 12 {
         KNIGHT_PROMOTED | BISHOP_PROMOTED | ROOK_PROMOTED | QUEEN_PROMOTED => {
-            if let MoveResult::Promotions(promoted_piece_type, dest_piece_type) = mov_result {
-                unapply_promotion(board, turn, mov, promoted_piece_type, dest_piece_type);
+            if let MoveResult::Promotions(promoted_piece_type, dest_piece_type, enemy_rooks, enemy_double_pawn_push) = mov_result {
+                unapply_promotion(board, turn, mov, promoted_piece_type, dest_piece_type , enemy_rooks ,enemy_double_pawn_push);
             }
         },
         EN_PESSANT => {
-            if let MoveResult::Value(enemy_double_push_pawns) = mov_result {
+            if let MoveResult::Value(enemy_double_push_pawns, _) = mov_result {
                 unpply_enpessant(board, turn, mov, enemy_double_push_pawns);
             }
         },
         CASTLE_KING | CASTLE_QUEEN => {
-            if let MoveResult::Value(castle_rooks) = mov_result {
-                unapply_castle_move(board, turn, mov, castle_rooks);
+            if let MoveResult::Value(castle_rooks , enemy_double_pawn_push) = mov_result {
+                unapply_castle_move(board, turn, mov, castle_rooks , enemy_double_pawn_push);
             }
         },
         DOUBLE_PAWN_PUSH => {
-            unapply_doublw_pawn_push(board, turn, mov);
+            if let MoveResult::None(enemy_double_pawn_push) = mov_result {
+                unapply_double_pawn_push(board, turn, mov, enemy_double_pawn_push);
+            }
         },
         _ => {
-            if let MoveResult::Normal(src_piece_type, dest_piece_type , rooks) = mov_result {
-                unapply_normal_move(board, turn, mov, src_piece_type, dest_piece_type , rooks);
+            if let MoveResult::Normal(src_piece_type, dest_piece_type , rooks , enemy_rooks ,enemy_double_pawn_push) = mov_result {
+                unapply_normal_move(board, turn, mov, src_piece_type, dest_piece_type , rooks , enemy_rooks ,  enemy_double_pawn_push);
             }
         }
     }
