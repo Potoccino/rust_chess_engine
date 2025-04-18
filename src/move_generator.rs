@@ -1,5 +1,6 @@
 
-use crate::{attack_maps::{DIAGONAL_RAYS, KING_ATTACKS, KNIGHT_JUMPS, PAWN_CAPTURES, PAWN_PUSH, STRAIGHT_RAYS}, piece_set::PieceSet, utils::{flip_bit, get_lsb, print_bitset, test_bit}};
+use crate::{attack_maps::{DIAGONAL_RAYS, KING_ATTACKS, KNIGHT_JUMPS, PAWN_CAPTURES, PAWN_PUSH, STRAIGHT_RAYS}, 
+piece_set::PieceSet, player::Player, utils::{flip_bit, get_lsb, test_bit}};
 
 
 
@@ -103,10 +104,10 @@ pub fn generate_pawn_moves(index : usize , occupied : u64 , turn : usize , enemy
 }
 
 
-pub fn generate_king_moves(index : usize , occupied : u64 , castle_rooks : u64 , turn : bool , enemey_attack_map : u64) -> u64{
+pub fn generate_king_moves(index : usize , occupied : u64 , castle_rooks : u64 , turn : Player , enemey_attack_map : u64) -> u64{
     let mut moves = KING_ATTACKS[index];
 
-    if turn == false && index == WHITE_KING_START {
+    if turn == Player::White && index == WHITE_KING_START {
         if test_bit(castle_rooks, 7) && (occupied & WHITE_KINGSIDE_MASK == 0) && (enemey_attack_map & WHITE_KINGSIDE_MASK_WITH_KING) == 0 {
             moves |= 1 << 6;
         }
@@ -115,7 +116,7 @@ pub fn generate_king_moves(index : usize , occupied : u64 , castle_rooks : u64 ,
         }
     } 
 
-    if turn == true && index == BLACK_KING_START {
+    if turn == Player::Black && index == BLACK_KING_START {
         if test_bit(castle_rooks, 63) && (occupied & BLACK_KINGSIDE_MASK == 0) && (enemey_attack_map & BLACK_KINGSIDE_MASK_WITH_KING) == 0 {
             moves |= 1u64 << 62;
         }
@@ -230,6 +231,6 @@ pub fn generate_king_attacks(index : usize) -> u64 {
     KING_ATTACKS[index]
 }
 
-pub fn generate_pawn_attacks(index : usize , turn : bool) -> u64 {
-    PAWN_CAPTURES[turn as usize][index]
+pub fn generate_pawn_attacks(index : usize , turn : &Player) -> u64 {
+    PAWN_CAPTURES[*turn as usize][index]
 }

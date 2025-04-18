@@ -14,6 +14,7 @@ mod tests {
 
     use crate::bit_board::BitBoard;
     use crate::piece_set::PieceSet;
+    use crate::player::Player;
     use crate::utils;
     use crate::utils::*;
     use crate::engine::*;
@@ -22,7 +23,7 @@ mod tests {
     const CASTLE_QUEEN: u16 = 7; // Adjust to match your actual constant value
 
     // Helper function to create a clean board with kings and rooks in castling position
-    fn setup_castling_board(side: bool) -> BitBoard {
+    fn setup_castling_board(side: Player) -> BitBoard {
         let mut board = BitBoard::get_empty_board(); // Assuming there's a default implementation
         
             board.white_set.kings = 1u64 << 4; // King at e1
@@ -62,8 +63,8 @@ mod tests {
     }
 
     // Helper function to print board for debugging
-    fn print_board_state(board: &BitBoard, side: bool) {
-        let pieces = if side == false { &board.white_set } else { &board.black_set };
+    fn print_board_state(board: &BitBoard, side: Player) {
+        let pieces = if side == Player::White { &board.white_set } else { &board.black_set };
         println!("Kings: {:#066b}", pieces.kings);
         println!("Rooks: {:#066b}", pieces.rooks);
         println!("Occupied: {:#066b}", pieces.occupied);
@@ -73,15 +74,15 @@ mod tests {
     #[test]
     fn test_white_kingside_castle() {
         // Setup
-        let mut board = setup_castling_board(false); // White castling
-        let initial_board = setup_castling_board(false); // Keep a copy of the initial state
+        let mut board = setup_castling_board(Player::White); // White castling
+        let initial_board = setup_castling_board(Player::White); // Keep a copy of the initial state
         let king_side_castle = CASTLE_KING << 12; // Create kingside castle move
         
         // Save the initial castle_rooks value
         let initial_castle_rooks = board.white_set.castle_rooks;
         
         // Act
-        let saved_castle_rooks = apply_castle_move(&mut board, false, king_side_castle).0;
+        let saved_castle_rooks = apply_castle_move(&mut board, Player::White, king_side_castle).0;
         
         // Assert
         assert_eq!(saved_castle_rooks, initial_castle_rooks); // Check that returned value matches initial value
@@ -91,7 +92,7 @@ mod tests {
         assert_eq!(board.white_set.castle_rooks, 0); // Castle rooks should be 0
         
         // Test unapply
-        unapply_castle_move(&mut board, false, king_side_castle, saved_castle_rooks , 0);
+        unapply_castle_move(&mut board, Player::White, king_side_castle, saved_castle_rooks , 0);
         
         assert_eq!(board.white_set.kings, 1u64 << 4); // King should be at e1   
         assert_eq!(board.white_set.rooks, (1u64 << 0) | (1u64 << 7)); // Rooks at a1 and h1
@@ -109,15 +110,15 @@ mod tests {
     #[test]
     fn test_white_queenside_castle() {
         // Setup
-        let mut board = setup_castling_board(false); // White castling
-        let initial_board = setup_castling_board(false); // Keep a copy of the initial state
+        let mut board = setup_castling_board(Player::White); // White castling
+        let initial_board = setup_castling_board(Player::White); // Keep a copy of the initial state
         let queen_side_castle = CASTLE_QUEEN << 12; // Create queenside castle move
         
         // Save the initial castle_rooks value
         let initial_castle_rooks = board.white_set.castle_rooks;
         
         // Act
-        let saved_castle_rooks = apply_castle_move(&mut board, false, queen_side_castle).0;
+        let saved_castle_rooks = apply_castle_move(&mut board, Player::White, queen_side_castle).0;
         
         // Assert
         assert_eq!(saved_castle_rooks, initial_castle_rooks); // Check that returned value matches initial value
@@ -127,7 +128,7 @@ mod tests {
         assert_eq!(board.white_set.castle_rooks, 0); // Castle rooks should be 0
         
         // Test unapply
-        unapply_castle_move(&mut board, false, queen_side_castle, saved_castle_rooks , 0);
+        unapply_castle_move(&mut board, Player::White, queen_side_castle, saved_castle_rooks , 0);
         
         // The board should be completely identical to the initial board
         assert!(compare_boards(&board, &initial_board));
@@ -136,15 +137,15 @@ mod tests {
     #[test]
     fn test_black_kingside_castle() {
         // Setup
-        let mut board = setup_castling_board(true); // Black castling
-        let initial_board = setup_castling_board(true); // Keep a copy of the initial state
+        let mut board = setup_castling_board(Player::Black); // Black castling
+        let initial_board = setup_castling_board(Player::Black); // Keep a copy of the initial state
         let king_side_castle = CASTLE_KING << 12; // Create kingside castle move
         
         // Save the initial castle_rooks value
         let initial_castle_rooks = board.black_set.castle_rooks;
         
         // Act
-        let saved_castle_rooks = apply_castle_move(&mut board, true, king_side_castle).0;
+        let saved_castle_rooks = apply_castle_move(&mut board, Player::Black, king_side_castle).0;
         
         // Assert
         assert_eq!(saved_castle_rooks, initial_castle_rooks); // Check that returned value matches initial value
@@ -154,7 +155,7 @@ mod tests {
         assert_eq!(board.black_set.castle_rooks, 0); // Castle rooks should be 0
         
         // Test unapply
-        unapply_castle_move(&mut board, true, king_side_castle, saved_castle_rooks,0);
+        unapply_castle_move(&mut board, Player::Black, king_side_castle, saved_castle_rooks,0);
         
         // The board should be completely identical to the initial board
         assert!(compare_boards(&board, &initial_board));
@@ -163,15 +164,15 @@ mod tests {
     #[test]
     fn test_black_queenside_castle() {
         // Setup
-        let mut board = setup_castling_board(true); // Black castling
-        let initial_board = setup_castling_board(true); // Keep a copy of the initial state
+        let mut board = setup_castling_board(Player::Black); // Black castling
+        let initial_board = setup_castling_board(Player::Black); // Keep a copy of the initial state
         let queen_side_castle = CASTLE_QUEEN << 12; // Create queenside castle move
         
         // Save the initial castle_rooks value
         let initial_castle_rooks = board.black_set.castle_rooks;
         
         // Act
-        let saved_castle_rooks = apply_castle_move(&mut board, true, queen_side_castle).0;
+        let saved_castle_rooks = apply_castle_move(&mut board, Player::Black, queen_side_castle).0;
         
         // Assert
         assert_eq!(saved_castle_rooks, initial_castle_rooks); // Check that returned value matches initial value
@@ -181,7 +182,7 @@ mod tests {
         assert_eq!(board.black_set.castle_rooks, 0); // Castle rooks should be 0
         
         // Test unapply
-        unapply_castle_move(&mut board, true, queen_side_castle, saved_castle_rooks , 0);
+        unapply_castle_move(&mut board, Player::Black, queen_side_castle, saved_castle_rooks , 0);
         
         // The board should be completely identical to the initial board
         assert!(compare_boards(&board, &initial_board));
@@ -190,8 +191,8 @@ mod tests {
     #[test]
     fn test_apply_unapply_sequence() {
         // This test verifies that applying and unapplying multiple castling moves works correctly
-        let mut board = setup_castling_board(false); // Start with white
-        let initial_board = setup_castling_board(false); // Keep a copy of the initial state
+        let mut board = setup_castling_board(Player::White); // Start with white
+        let initial_board = setup_castling_board(Player::White); // Keep a copy of the initial state
         
         // Save the initial castle_rooks values
         let white_initial_castle_rooks = board.white_set.castle_rooks;
@@ -199,7 +200,7 @@ mod tests {
         
         // White kingside castle
         let white_king_castle = CASTLE_KING << 12;
-        let saved_white_castle_rooks = apply_castle_move(&mut board, false, white_king_castle).0;
+        let saved_white_castle_rooks = apply_castle_move(&mut board, Player::White , white_king_castle).0;
         
         // Verify white castle_rooks is now 0
         assert_eq!(board.white_set.castle_rooks, 0);
@@ -207,19 +208,19 @@ mod tests {
         
         // Black queenside castle
         let black_queen_castle = CASTLE_QUEEN << 12;
-        let saved_black_castle_rooks = apply_castle_move(&mut board, true, black_queen_castle).0;
+        let saved_black_castle_rooks = apply_castle_move(&mut board, Player::Black, black_queen_castle).0;
         
         // Verify black castle_rooks is now 0
         assert_eq!(board.black_set.castle_rooks, 0);
         assert_eq!(saved_black_castle_rooks, black_initial_castle_rooks);
         
         // Now unapply in reverse order
-        unapply_castle_move(&mut board, true, black_queen_castle, saved_black_castle_rooks,0);
+        unapply_castle_move(&mut board, Player::Black, black_queen_castle, saved_black_castle_rooks,0);
         
         // Verify black castle_rooks is restored
         assert_eq!(board.black_set.castle_rooks, black_initial_castle_rooks);
         
-        unapply_castle_move(&mut board, false, white_king_castle, saved_white_castle_rooks,0);
+        unapply_castle_move(&mut board, Player::White , white_king_castle, saved_white_castle_rooks,0);
         
         // Verify white castle_rooks is restored
         assert_eq!(board.white_set.castle_rooks, white_initial_castle_rooks);
@@ -234,21 +235,21 @@ mod tests {
         // (e.g. when only one rook can castle)
         
         // Setup board with only kingside castling rights
-        let mut board = setup_castling_board(false);
+        let mut board = setup_castling_board(Player::White);
         board.white_set.castle_rooks = 1u64 << 7; // Only h1 rook can castle
         
         let initial_board = board.clone(); // Keep a copy
         
         // Do kingside castle
         let king_side_castle = CASTLE_KING << 12;
-        let saved_castle_rooks = apply_castle_move(&mut board, false, king_side_castle).0;
+        let saved_castle_rooks = apply_castle_move(&mut board, Player::White, king_side_castle).0;
         
         // Verify saved value
         assert_eq!(saved_castle_rooks, 1u64 << 7);
         assert_eq!(board.white_set.castle_rooks, 0);
         
         // Unapply
-        unapply_castle_move(&mut board, false, king_side_castle, saved_castle_rooks,0);
+        unapply_castle_move(&mut board, Player::White, king_side_castle, saved_castle_rooks,0);
         
         // Verify restoration
         assert_eq!(board.white_set.castle_rooks, 1u64 << 7);
@@ -275,7 +276,7 @@ mod tests {
         let initial_double_push_pawns = board.white_set.double_push_pawns;
         
         // Apply move
-        let res = apply_double_pawn_push(&mut board, false, mov);
+        let res = apply_double_pawn_push(&mut board, Player::White, mov);
         
         // Check that the double push was applied correctly
         assert_eq!(get_bit(board.white_set.pawns, src), false, "Pawn should be removed from src");
@@ -288,7 +289,7 @@ mod tests {
         assert_eq!(board.white_set.double_push_pawns, 1u64 << 20, "Double push flag should be set at e3");
         
         // Unapply move
-        unapply_double_pawn_push(&mut board, false, mov , 0 );
+        unapply_double_pawn_push(&mut board, Player::White, mov , 0 );
         
         // Check that the board is restored to its initial state
         assert_eq!(board.white_set.pawns, initial_white_pawns, "Pawns should be restored to initial state");
@@ -313,11 +314,11 @@ mod tests {
         let initial_double_push_pawns = board.black_set.double_push_pawns;
         
         // Apply move
-        apply_double_pawn_push(&mut board, true, mov);
+        apply_double_pawn_push(&mut board, Player::Black, mov);
         
         // Check that the double push was applied correctly
-        assert_eq!(get_bit(board.black_set.pawns, src), false, "Black pawn should be removed from src");
-        assert_eq!(get_bit(board.black_set.occupied, src), false, "Black occupied bit should be removed from src");
+        assert_eq!(get_bit(board.black_set.pawns, src),false, "Black pawn should be removed from src");
+        assert_eq!(get_bit(board.black_set.occupied, src),false, "Black occupied bit should be removed from src");
         assert_eq!(get_bit(board.black_set.pawns, dest), true, "Black pawn should be added to dest");
         assert_eq!(get_bit(board.black_set.occupied, dest), true, "Black occupied bit should be added to dest");
         
@@ -326,7 +327,7 @@ mod tests {
         assert_eq!(board.black_set.double_push_pawns, 1u64 << 44, "Double push flag should be set at e6");
         
         // Unapply move
-        unapply_double_pawn_push(&mut board, true, mov , 0);
+        unapply_double_pawn_push(&mut board, Player::Black, mov , 0);
         
         // Check that the board is restored to its initial state
         assert_eq!(board.black_set.pawns, initial_black_pawns, "Black pawns should be restored to initial state");
@@ -337,23 +338,25 @@ mod tests {
 
     
 
-    fn preft_helper(mut board :  &mut BitBoard , turn : bool , depth : i32 ) -> u64{
+    fn preft_helper(mut board :  &mut BitBoard , depth : i32 ) -> u64{
         if depth == 0 {
             return 1;
         }
+        let turn = board.player;
+        board.generate_attack_maps(turn);
+        board.generate_attack_maps(!turn);
 
-        board.white_set.attack_map = generate_attack_maps(&mut board, false);
-        board.black_set.attack_map = generate_attack_maps(&mut board, true);
-        
-        let moves = generate_moves(&mut board, turn);
+        let moves = board.generate_moves(turn);
         let mut move_count = 0 ;
 
         for mov in moves {
-            let mov_result = apply_move(&mut board, turn, mov);
-            if !king_in_check(&board, turn) {
-                move_count += preft_helper(board, !turn, depth - 1 );
+            let mov_result = board.apply_move(turn, mov);
+            if !board.king_in_check(turn) {
+                board.player = !turn;
+                move_count += preft_helper(board, depth - 1 );
+                board.player = turn;
             }
-            unapply_move(&mut board, turn, mov, mov_result);
+            board.unapply_move(turn, mov, mov_result);
         }
 
         move_count
@@ -376,7 +379,7 @@ mod tests {
             (6	, 119060324	),
             (5	, 193690690	),
             (6	, 11030083),
-            (5	, 15833292),
+            (6	, 706045033),
             (5	, 89941194),
             (5	, 164075551)
         ];
@@ -384,8 +387,9 @@ mod tests {
 
         for (i, fen) in fen_strings.iter().enumerate() {
             let (depth, expected_count) = depth_and_results[i];
-            let (mut board , turn)= utils::fen_to_bitboard(fen).unwrap();
-            let move_count = preft_helper(&mut board , turn , depth  );
+
+            let mut board = BitBoard::fen_to_bitboard(fen).unwrap();
+            let move_count = preft_helper(&mut board , depth  );
 
             if move_count != expected_count {
                 println!("Failed for FEN {} at depth : {}", fen , depth);
